@@ -1,0 +1,2045 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Procedural Grand Prix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0f172a;
+            background-image: 
+                linear-gradient(rgba(30, 41, 59, 0.6) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(30, 41, 59, 0.6) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: center center;
+            color: #f8fafc;
+            font-family: 'Orbitron', sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain; 
+            touch-action: none;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            padding: 1.5rem;
+            pointer-events: auto;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            transition: opacity 0.3s ease;
+        }
+        input[type="text"], input[type="number"] {
+            background: transparent;
+            border: 1px solid #38bdf8;
+            color: #38bdf8;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        input[type="text"]:focus, input[type="number"]:focus {
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+            background: rgba(56, 189, 248, 0.1);
+        }
+        button {
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        .hud-text {
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+        .ai-stat {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+        .hide-ui {
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+        #statsCanvas {
+            width: 100%;
+            height: 100%;
+        }
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            background: currentColor;
+            cursor: pointer;
+            margin-top: -7px;
+            box-shadow: 0 0 10px currentColor;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-menu" class="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md transition-opacity duration-500">
+        <div class="glass-panel flex flex-col items-center gap-8 p-12 max-w-xl w-full mx-4 border border-sky-500/30">
+            <div class="text-center">
+                <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-indigo-400 to-fuchsia-500 mb-4 tracking-tight">AI GRAND PRIX</h1>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Observez des réseaux de neurones apprendre à piloter sur des circuits générés procéduralement, ou dessinez-les vous-même.
+                </p>
+            </div>
+            
+            <div class="w-full flex flex-col gap-4 mt-4">
+                <button id="menu-evo-btn" class="w-full border-2 border-sky-500 text-sky-400 hover:bg-sky-500/20 font-bold py-5 px-6 uppercase tracking-widest shadow-[0_0_15px_rgba(56,189,248,0.2)] hover:shadow-[0_0_25px_rgba(56,189,248,0.5)]">
+                    Génération Procédurale
+                </button>
+                <button id="menu-draw-btn" class="w-full border-2 border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/20 font-bold py-5 px-6 uppercase tracking-widest shadow-[0_0_15px_rgba(217,70,239,0.2)] hover:shadow-[0_0_25px_rgba(217,70,239,0.5)]">
+                    Dessiner un Circuit
+                </button>
+                <div class="flex gap-2 w-full">
+                    <button id="menu-random-btn" class="flex-1 border-2 border-emerald-500 text-emerald-400 hover:bg-emerald-500/20 font-bold py-5 px-6 uppercase tracking-widest shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)]">
+                        Mode Généralisation
+                    </button>
+                    <div class="flex flex-col justify-center items-center border-2 border-emerald-500/50 bg-emerald-900/20 px-2 w-32 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                        <span class="text-[9px] text-emerald-400/80 uppercase tracking-widest font-bold mb-1 text-center leading-tight">Générations<br>par circuit</span>
+                        <input type="number" id="gensPerTrackInput" value="1" min="1" max="1000" class="w-full bg-transparent text-center text-white font-black text-xl outline-none">
+                    </div>
+                </div>
+                
+                <button id="menu-settings-btn" class="w-full border-2 border-slate-500 text-slate-400 hover:bg-slate-500/20 font-bold py-3 px-6 uppercase tracking-widest shadow-[0_0_15px_rgba(100,116,139,0.2)] hover:shadow-[0_0_25px_rgba(100,116,139,0.5)] transition-all mt-2 text-sm">
+                    Paramètres Avancés
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-menu" class="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-md opacity-0 hidden transition-opacity duration-300">
+        <div class="glass-panel flex flex-col items-center gap-6 p-8 w-11/12 max-w-xl max-h-[90vh] overflow-y-auto border-slate-500/50">
+            <div class="w-full flex justify-between items-center mb-2 border-b border-slate-700 pb-4">
+                <h2 class="text-2xl font-black tracking-widest text-slate-300">PARAMÈTRES AVANCÉS</h2>
+                <button id="closeSettingsBtn" class="text-slate-500 hover:text-white font-bold text-3xl leading-none">&times;</button>
+            </div>
+            
+            <div class="w-full flex flex-col gap-6 py-2">
+                <div class="flex flex-col gap-3">
+                    <label class="text-sm font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+                        <span>Difficulté du circuit</span>
+                        <span id="diffValDisplay" class="text-sky-400">50%</span>
+                    </label>
+                    <input type="range" id="difficultyInput" min="0" max="100" value="50" class="text-sky-400">
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">0% = Ovales simples | 100% = Épingles et virages complexes</p>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <label class="text-sm font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+                        <span>Voitures par génération</span>
+                        <span id="popValDisplay" class="text-emerald-400">100</span>
+                    </label>
+                    <input type="range" id="populationInput" min="10" max="500" step="10" value="100" class="text-emerald-400">
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">Augmentez pour une meilleure évolution génétique (Plus gourmand en performances).</p>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <label class="text-sm font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+                        <span>Couches Cachées (IA)</span>
+                        <span id="hiddenLayersDisplay" class="text-fuchsia-400">1</span>
+                    </label>
+                    <input type="range" id="hiddenLayersInput" min="1" max="5" step="1" value="1" class="text-fuchsia-400">
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">Plus de couches = profondeur de réflexion (1 par défaut).</p>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <label class="text-sm font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+                        <span>Neurones par couche (IA)</span>
+                        <span id="neuronsDisplay" class="text-fuchsia-400">12</span>
+                    </label>
+                    <input type="range" id="neuronsInput" min="4" max="32" step="2" value="12" class="text-fuchsia-400">
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">Plus de neurones = mémorisation des situations (12 par défaut).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="race-end-menu" class="absolute inset-0 z-40 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm opacity-0 hidden transition-opacity duration-500">
+        <div class="glass-panel flex flex-col items-center gap-8 p-12 max-w-2xl w-full mx-4 !bg-transparent !border-none !shadow-none">
+            <div class="text-center">
+                <h2 id="race-end-title" class="text-6xl font-black mb-4 tracking-widest text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.8)]">VICTOIRE</h2>
+                <p id="race-end-subtitle" class="text-slate-300 text-xl tracking-widest font-bold">L'HUMANITÉ TRIOMPHE</p>
+            </div>
+            <div class="w-full flex flex-col gap-4 mt-6">
+                <button id="btn-replay" class="w-full border-2 border-emerald-500 text-emerald-400 hover:bg-emerald-500/20 font-bold py-4 px-6 uppercase tracking-widest shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)]">
+                    Rejouer
+                </button>
+                <button id="btn-return-evo" class="w-full border border-slate-500 text-slate-300 hover:bg-slate-500/20 hover:text-white font-bold py-4 px-6 uppercase tracking-widest transition-colors">
+                    Repasser à l'entraînement
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="stats-menu" class="absolute inset-0 z-40 flex items-center justify-center bg-slate-900/90 backdrop-blur-md opacity-0 hidden transition-opacity duration-300">
+        <div class="glass-panel flex flex-col items-center gap-4 p-8 w-11/12 max-w-4xl h-3/4 border-sky-500/50">
+            <div class="w-full flex justify-between items-center mb-2 border-b border-slate-700 pb-4">
+                <h2 class="text-2xl font-black tracking-widest text-sky-400">ÉVOLUTION DES PERFORMANCES</h2>
+                <button id="closeStatsBtn" class="text-slate-400 hover:text-white font-bold text-3xl leading-none">&times;</button>
+            </div>
+            <div class="w-full flex-1 relative">
+                <canvas id="statsCanvas" class="border border-slate-700/50 bg-slate-900/50"></canvas>
+            </div>
+            <div class="w-full flex justify-center gap-8 mt-2 text-xs font-bold tracking-widest flex-wrap">
+                <span class="text-sky-400 flex items-center gap-2" id="legendDistance"><span class="w-3 h-3 bg-sky-400 inline-block"></span> Distance Max</span>
+                <span class="text-fuchsia-400 flex items-center gap-2" id="legendLapTime"><span class="w-3 h-3 bg-fuchsia-400 inline-block"></span> Temps au Tour (Inversé)</span>
+                <span class="text-emerald-400 flex items-center gap-2" id="legendWinRate" style="display:none;"><span class="w-3 h-3 bg-emerald-400 inline-block"></span> Réussite (100 derniers)</span>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas" width="1920" height="1080"></canvas>
+
+    <div id="ui-layer" style="display: none;">
+
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-auto z-50">
+            <button id="homeBtn" class="glass-panel !p-3 !rounded-full !border-slate-500/50 text-slate-400 hover:text-white hover:border-sky-400 hover:shadow-[0_0_15px_rgba(56,189,248,0.5)] transition-all" title="Menu Principal">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="flex justify-between items-start">
+            <div class="glass-panel flex flex-col gap-2 min-w-[250px]" id="panel-telemetry">
+                <div class="text-sm text-sky-400 uppercase tracking-widest font-bold">Télémétrie</div>
+                <div class="flex items-baseline gap-2">
+                    <span id="speedDisplay" class="text-4xl font-black text-white hud-text">0</span>
+                    <span class="text-lg text-slate-300">km/h</span>
+                </div>
+                <div class="w-full bg-slate-800 border border-slate-600 h-3 mt-1">
+                    <div id="rpmBar" class="bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-600 h-full w-0 transition-all duration-100"></div>
+                </div>
+                <div id="statusIndicator" class="text-xs font-bold mt-2 text-slate-400 uppercase tracking-widest">NORMAL</div>
+            </div>
+
+            <div class="glass-panel flex flex-col min-w-[320px]" id="panel-ai">
+                <div class="text-sm text-emerald-400 uppercase tracking-widest font-bold mb-3 flex justify-between items-center border-b border-emerald-500/30 pb-2">
+                    <span>Moteur</span>
+                    <button id="statsBtn" class="text-[10px] border border-emerald-500 text-emerald-400 hover:bg-emerald-500/20 px-2 py-1 tracking-widest transition-colors font-bold">STATISTIQUES</button>
+                </div>
+                
+                <div class="ai-stat">
+                    <span class="text-slate-400 text-sm">Génération</span>
+                    <span class="text-white font-bold text-lg" id="genDisplay">1</span>
+                </div>
+                <div class="ai-stat">
+                    <span class="text-slate-400 text-sm">Population en vie</span>
+                    <span class="text-amber-400 font-bold" id="aliveDisplay">100 / 100</span>
+                </div>
+                <div class="ai-stat">
+                    <span class="text-slate-400 text-sm">Distance Max</span>
+                    <span class="text-sky-400 font-black text-xl" id="bestFitnessDisplay">0 m</span>
+                </div>
+                <div class="ai-stat border-none mb-0 pb-0 mt-2 pt-2 border-t border-slate-700/50">
+                    <span class="text-slate-400 text-sm font-bold">RECORD ABSOLU</span>
+                    <span class="text-white font-black text-xl transition-all duration-300" id="bestLapDisplay">--:--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-between items-end">
+            <div class="glass-panel flex flex-col gap-3" id="panel-controls">
+                <div class="text-sm text-slate-400 uppercase tracking-widest font-bold" id="panel-controls-title">Création & Modes</div>
+                <div class="flex gap-3 items-stretch h-12">
+                    <input type="text" id="seedInput" value="LOLO" class="px-4 py-2 font-mono text-sm uppercase font-bold w-28 h-full">
+                    <button id="generateBtn" class="border border-indigo-500 text-indigo-400 hover:bg-indigo-500/20 font-bold px-4 h-full uppercase tracking-wider text-xs whitespace-nowrap transition-colors">
+                        Générer
+                    </button>
+                    <button id="drawModeBtn" class="border border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/20 font-bold px-4 h-full uppercase tracking-wider text-xs shadow-[0_0_10px_rgba(217,70,239,0.3)] whitespace-nowrap transition-colors">
+                        Dessiner
+                    </button>
+                    <button id="playBtn" class="border border-emerald-500 text-emerald-400 hover:bg-emerald-500/20 font-bold px-5 h-full uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all flex-1 min-w-[200px]">
+                        Affronter l'IA
+                    </button>
+                </div>
+            </div>
+
+            <div class="glass-panel text-right flex flex-col gap-2" id="panel-time">
+                <div class="text-sm text-slate-400 uppercase tracking-widest font-bold">Vitesse de Simulation</div>
+                <div class="flex gap-2 justify-end h-8 mt-1">
+                    <button class="speed-btn border border-yellow-500 text-yellow-400 hover:bg-yellow-500/20 px-3 h-full text-sm font-bold transition-colors" data-speed="0">x0</button>
+                    <button class="speed-btn border border-sky-400 text-sky-400 bg-sky-500/30 px-3 h-full text-sm font-bold transition-colors" data-speed="1">x1</button>
+                    <button class="speed-btn border border-slate-600 text-slate-400 hover:bg-slate-700/50 px-3 h-full text-sm font-bold transition-colors" data-speed="2">x2</button>
+                    <button class="speed-btn border border-slate-600 text-slate-400 hover:bg-slate-700/50 px-3 h-full text-sm font-bold transition-colors" data-speed="5">x5</button>
+                    <button class="speed-btn border border-slate-600 text-slate-400 hover:bg-slate-700/50 px-3 h-full text-sm font-bold transition-colors" data-speed="50">MAX</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.gameMode = 'menu'; 
+        window.previousEvoMode = 'evolution'; 
+        window.drawIntent = 'train'; 
+        window.randomStage = 1;
+        window.gensOnCurrentTrack = 0;
+        window.maxGensPerTrack = 1;
+        
+        window.trackDifficulty = 50; 
+        window.populationSize = 100;
+        window.nnHiddenLayers = 1;
+        window.nnNeuronsPerLayer = 12;
+        
+        window.racePlayerCar = null;
+        window.raceAiCars = []; 
+        window.raceWinner = null;
+        window.raceStarted = false;
+        window.raceEndMenuShown = false;
+        window.statsMenuShown = false;
+        window.globalBestBrain = null;
+        window.globalBestLapTicks = Infinity;
+        window.populationHistory = []; 
+        window.stageResults = []; 
+        window.currentStageWon = false; 
+        window.keys = {};
+        window.rAF_ID = null; 
+
+        let savedTrainingState = null;
+
+        function saveTrainingState() {
+            if (!savedTrainingState) {
+                savedTrainingState = {
+                    track: track,
+                    population: population,
+                    lastLoadedSeed: window.lastLoadedSeed,
+                    randomStage: window.randomStage,
+                    gensOnCurrentTrack: window.gensOnCurrentTrack,
+                    statsHistory: [...window.populationHistory],
+                    stageResults: [...window.stageResults],
+                    currentStageWon: window.currentStageWon,
+                    globalBestLapTicks: window.globalBestLapTicks,
+                    globalBestBrain: window.globalBestBrain ? window.globalBestBrain.clone() : null
+                };
+            }
+        }
+
+        function restoreTrainingState() {
+            if (savedTrainingState) {
+                track = savedTrainingState.track;
+                population = savedTrainingState.population;
+                window.lastLoadedSeed = savedTrainingState.lastLoadedSeed;
+                window.randomStage = savedTrainingState.randomStage;
+                window.gensOnCurrentTrack = savedTrainingState.gensOnCurrentTrack;
+                window.populationHistory = savedTrainingState.statsHistory;
+                window.stageResults = savedTrainingState.stageResults;
+                window.currentStageWon = savedTrainingState.currentStageWon;
+                window.globalBestLapTicks = savedTrainingState.globalBestLapTicks;
+                window.globalBestBrain = savedTrainingState.globalBestBrain;
+
+                let seedStr = Array.isArray(window.lastLoadedSeed) ? "DESSIN" : window.lastLoadedSeed;
+                document.getElementById('seedInput').value = seedStr;
+
+                if (window.globalBestLapTicks < Infinity) {
+                    let seconds = (window.globalBestLapTicks / 60).toFixed(2);
+                    document.getElementById('bestLapDisplay').textContent = seconds + "s";
+                } else {
+                    document.getElementById('bestLapDisplay').textContent = "--:--";
+                }
+
+                savedTrainingState = null;
+            }
+        }
+
+        function setSimulationSpeed(speed) {
+            const btn = document.querySelector(`.speed-btn[data-speed="${speed}"]`);
+            if (btn) btn.click();
+        }
+
+        document.getElementById('seedInput').addEventListener('focus', () => {
+            setSimulationSpeed(0);
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+            }
+            window.keys[e.key] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+            }
+            window.keys[e.key] = false;
+        });
+
+        function getCanvasPos(e) {
+            const canvas = document.getElementById('gameCanvas');
+            const rect = canvas.getBoundingClientRect();
+            
+            let displayRatio = rect.width / rect.height;
+            let canvasRatio = canvas.width / canvas.height;
+            let actualWidth = rect.width;
+            let actualHeight = rect.height;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            if (displayRatio > canvasRatio) {
+                actualWidth = rect.height * canvasRatio;
+                offsetX = (rect.width - actualWidth) / 2;
+            } else {
+                actualHeight = rect.width / canvasRatio;
+                offsetY = (rect.height - actualHeight) / 2;
+            }
+
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            return {
+                x: ((clientX - rect.left - offsetX) / actualWidth) * canvas.width,
+                y: ((clientY - rect.top - offsetY) / actualHeight) * canvas.height
+            };
+        }
+
+        function setupEvoUI() {
+            window.previousEvoMode = 'evolution';
+            document.getElementById('panel-controls-title').textContent = "Création & Modes";
+            
+            document.getElementById('generateBtn').classList.remove('hidden');
+            const genBtn = document.getElementById('generateBtn');
+            genBtn.textContent = "Générer";
+            genBtn.className = "border border-indigo-500 text-indigo-400 hover:bg-indigo-500/20 font-bold px-4 h-full uppercase tracking-wider text-xs whitespace-nowrap transition-colors";
+
+            document.getElementById('drawModeBtn').classList.remove('hidden');
+            const drawBtn = document.getElementById('drawModeBtn');
+            drawBtn.textContent = "Dessiner";
+            drawBtn.className = "border border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/20 font-bold px-4 h-full uppercase tracking-wider text-xs shadow-[0_0_10px_rgba(217,70,239,0.3)] whitespace-nowrap transition-colors";
+
+            document.getElementById('seedInput').classList.remove('hidden');
+            document.getElementById('seedInput').disabled = false;
+            document.getElementById('seedInput').classList.remove('opacity-50');
+
+            const playBtn = document.getElementById('playBtn');
+            playBtn.classList.remove('hidden');
+            playBtn.textContent = "Affronter l'IA";
+            playBtn.className = "border border-emerald-500 text-emerald-400 hover:bg-emerald-500/20 font-bold px-5 h-full uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all flex-1 min-w-[200px]";
+
+            document.getElementById('panel-telemetry').classList.remove('hide-ui');
+            document.getElementById('panel-ai').classList.remove('hide-ui');
+            document.getElementById('panel-time').classList.remove('hide-ui');
+        }
+
+        function setupRandomEvoUI() {
+            window.previousEvoMode = 'random_evo';
+            document.getElementById('panel-controls-title').textContent = "Création & Modes";
+            
+            document.getElementById('generateBtn').classList.remove('hidden');
+            const genBtn = document.getElementById('generateBtn');
+            genBtn.textContent = "Course Aléatoire";
+            genBtn.className = "border border-amber-500 text-amber-400 hover:bg-amber-500/20 font-bold px-4 h-full uppercase tracking-wider text-xs whitespace-nowrap transition-colors";
+
+            document.getElementById('drawModeBtn').classList.remove('hidden');
+            const drawBtn = document.getElementById('drawModeBtn');
+            drawBtn.textContent = "Course sur Dessin";
+            drawBtn.className = "border border-fuchsia-500 text-fuchsia-400 hover:bg-fuchsia-500/20 font-bold px-4 h-full uppercase tracking-wider text-xs shadow-[0_0_10px_rgba(217,70,239,0.3)] whitespace-nowrap transition-colors";
+
+            document.getElementById('seedInput').classList.remove('hidden');
+            document.getElementById('seedInput').disabled = false;
+            document.getElementById('seedInput').classList.remove('opacity-50');
+
+            const playBtn = document.getElementById('playBtn');
+            playBtn.classList.remove('hidden');
+            playBtn.textContent = "Course personnalisée";
+            playBtn.className = "border border-emerald-500 text-emerald-400 hover:bg-emerald-500/20 font-bold px-5 h-full uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all flex-1 min-w-[200px]";
+
+            document.getElementById('panel-telemetry').classList.remove('hide-ui');
+            document.getElementById('panel-ai').classList.remove('hide-ui');
+            document.getElementById('panel-time').classList.remove('hide-ui');
+        }
+
+        function startRaceMode() {
+            window.gameMode = 'race';
+            setSimulationSpeed(1); 
+            
+            document.getElementById('panel-controls-title').textContent = "Course (Mode Manuel)";
+            document.getElementById('generateBtn').classList.add('hidden');
+            document.getElementById('drawModeBtn').classList.add('hidden');
+            document.getElementById('seedInput').classList.add('hidden');
+            
+            const btn = document.getElementById('playBtn');
+            btn.classList.remove('hidden');
+            btn.textContent = "Retour à l'entraînement";
+            btn.className = "border border-amber-500 text-amber-400 hover:bg-amber-500/20 font-bold px-5 h-full uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all flex-1";
+
+            window.racePlayerCar = new Car(track.startLine.point.x, track.startLine.point.y, track.startLine.angle, null, true);
+            window.racePlayerCar.color = '#10b981'; 
+            
+            let bestBrain = window.globalBestBrain || population.cars[0].brain;
+            
+            window.raceAiCars = [];
+            
+            if (window.previousEvoMode === 'random_evo') {
+                let ghostCount = Math.min(50, window.populationSize);
+                for (let i = 0; i < ghostCount; i++) {
+                    let brain = bestBrain.clone();
+                    if (i > 0) brain.mutate(0.05); 
+                    let aiCar = new Car(track.startLine.point.x, track.startLine.point.y, track.startLine.angle, brain);
+                    aiCar.color = i === 0 ? '#f43f5e' : '#fb7185'; 
+                    window.raceAiCars.push(aiCar);
+                }
+            } else {
+                let aiCar = new Car(track.startLine.point.x, track.startLine.point.y, track.startLine.angle, bestBrain);
+                aiCar.color = '#f43f5e';
+                window.raceAiCars.push(aiCar);
+            }
+            
+            window.raceWinner = null;
+            window.raceStarted = false;
+            window.raceEndMenuShown = false;
+            
+            const ind = document.getElementById('statusIndicator');
+            ind.textContent = "PRÊT. APPUYEZ SUR UNE TOUCHE...";
+            ind.className = "text-xs font-bold mt-2 uppercase tracking-widest text-yellow-400 animate-pulse";
+        }
+
+        function returnToTraining() {
+            const endMenu = document.getElementById('race-end-menu');
+            endMenu.classList.add('opacity-0');
+            setTimeout(() => endMenu.classList.add('hidden'), 500);
+
+            window.raceEndMenuShown = false;
+
+            restoreTrainingState();
+
+            window.gameMode = window.previousEvoMode;
+
+            const ind = document.getElementById('statusIndicator');
+            if (window.gameMode === 'random_evo') {
+                setupRandomEvoUI();
+                ind.textContent = `STAGE ${window.randomStage} (GEN ${window.gensOnCurrentTrack}/${window.maxGensPerTrack}) : NORMAL`;
+            } else {
+                setupEvoUI();
+                ind.textContent = "NORMAL";
+            }
+            ind.className = "text-xs font-bold mt-2 uppercase tracking-widest text-slate-400";
+        }
+
+        function drawStatsGraph() {
+            const canvas = document.getElementById('statsCanvas');
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, rect.width, rect.height);
+            
+            const isRandomEvo = (window.gameMode === 'random_evo');
+
+            if (isRandomEvo) {
+                document.getElementById('legendDistance').style.display = 'none';
+                document.getElementById('legendWinRate').style.display = 'flex';
+                document.getElementById('legendLapTime').style.display = 'none';
+            } else {
+                document.getElementById('legendDistance').style.display = 'flex';
+                document.getElementById('legendWinRate').style.display = 'none';
+                document.getElementById('legendLapTime').style.display = 'flex';
+            }
+
+            const paddingLeft = 60;
+            const paddingRight = 60;
+            const paddingTop = 30;
+            const paddingBottom = 40;
+            
+            const w = rect.width - paddingLeft - paddingRight;
+            const h = rect.height - paddingTop - paddingBottom;
+            
+            const history = window.populationHistory || [];
+            const maxGen = history.length > 0 ? Math.max(history[history.length-1].gen, 10) : 10;
+            
+            let maxFit = 10; 
+            let minLap = Infinity;
+            let maxLap = 0;
+            
+            if (history.length > 0) {
+                history.forEach(d => {
+                    if (d.fitness > maxFit) maxFit = d.fitness;
+                    if (d.lap < Infinity) {
+                        if (d.lap < minLap) minLap = d.lap;
+                        if (d.lap > maxLap) maxLap = d.lap;
+                    }
+                });
+            }
+            
+            let hasLaps = (minLap !== Infinity);
+            if (!hasLaps) { minLap = 0; maxLap = 100; }
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let i=0; i<=5; i++) {
+                let y = paddingTop + (h/5)*i;
+                ctx.moveTo(paddingLeft, y);
+                ctx.lineTo(paddingLeft+w, y);
+            }
+            for(let i=0; i<=5; i++) {
+                let x = paddingLeft + (w/5)*i;
+                ctx.moveTo(x, paddingTop);
+                ctx.lineTo(x, paddingTop+h);
+            }
+            ctx.stroke();
+
+            ctx.fillStyle = '#94a3b8'; 
+            ctx.font = '10px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            for(let i=0; i<=5; i++) {
+                let x = paddingLeft + (w/5)*i;
+                let genVal = Math.floor((maxGen/5)*i);
+                if (i === 0) genVal = 1; 
+                ctx.fillText("Gen " + genVal, x, paddingTop + h + 12);
+            }
+
+            if (isRandomEvo) {
+                ctx.fillStyle = '#10b981'; 
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                for(let i=0; i<=5; i++) {
+                    let y = paddingTop + (h/5)*i;
+                    let pctVal = Math.floor(100 - (100/5)*i); 
+                    ctx.fillText(pctVal + "%", paddingLeft - 10, y);
+                }
+
+                if (history.length > 0) {
+                    ctx.strokeStyle = '#10b981';
+                    ctx.lineWidth = 3;
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    history.forEach((d, i) => {
+                        let x = paddingLeft + (d.gen / maxGen) * w;
+                        let y = paddingTop + h - ((d.winRate || 0) / 100) * h;
+                        if(i===0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                }
+
+            } else {
+                ctx.fillStyle = '#38bdf8'; 
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                for(let i=0; i<=5; i++) {
+                    let y = paddingTop + (h/5)*i;
+                    let fitVal = Math.floor(maxFit - (maxFit/5)*i); 
+                    ctx.fillText(fitVal + "m", paddingLeft - 10, y);
+                }
+
+                if (history.length > 0) {
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 3;
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    history.forEach((d, i) => {
+                        let x = paddingLeft + (d.gen / maxGen) * w;
+                        let y = paddingTop + h - (Math.max(0, d.fitness) / maxFit) * h;
+                        if(i===0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                }
+            }
+
+            if (hasLaps && !isRandomEvo) {
+                ctx.fillStyle = '#d946ef'; 
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                let lapRange = Math.max(60, maxLap - minLap); 
+                
+                for(let i=0; i<=5; i++) {
+                    let y = paddingTop + (h/5)*i;
+                    let lapVal = minLap + (lapRange/5)*i;
+                    let seconds = (lapVal / 60).toFixed(1);
+                    ctx.fillText(seconds + "s", paddingLeft + w + 10, y);
+                }
+
+                if (history.length > 0) {
+                    ctx.strokeStyle = '#d946ef';
+                    ctx.lineWidth = 3;
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    let firstLapFound = false;
+                    
+                    history.forEach((d, i) => {
+                        if (d.lap < Infinity) {
+                            let x = paddingLeft + (d.gen / maxGen) * w;
+                            let normalizedLap = 1 - ((d.lap - minLap) / lapRange); 
+                            let y = paddingTop + h - (normalizedLap * h);
+                            
+                            if(!firstLapFound) { 
+                                ctx.moveTo(x, y); 
+                                firstLapFound = true; 
+                            } else { 
+                                ctx.lineTo(x, y); 
+                            }
+                        }
+                    });
+                    ctx.stroke();
+                }
+            }
+        }
+
+        const workerCode = `
+            let interval;
+            self.onmessage = function(e) {
+                if (e.data === 'start') {
+                    interval = setInterval(() => self.postMessage('tick'), 16);
+                } else if (e.data === 'stop') {
+                    clearInterval(interval);
+                }
+            };
+        `;
+        const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+        const backgroundTicker = new Worker(URL.createObjectURL(workerBlob));
+
+        backgroundTicker.onmessage = function() {
+            if (document.hidden && (window.gameMode === 'evolution' || window.gameMode === 'random_evo') && population && !window.statsMenuShown && simulationSpeed > 0) {
+                for (let s = 0; s < simulationSpeed; s++) {
+                    population.update();
+                }
+                document.getElementById('genDisplay').textContent = population.generation;
+                document.getElementById('aliveDisplay').textContent = `${population.aliveCount} / ${population.size}`;
+                document.getElementById('bestFitnessDisplay').textContent = `${Math.max(0, Math.floor(population.bestFitnessGlobal))} m`;
+            }
+        };
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                cancelAnimationFrame(window.rAF_ID);
+                backgroundTicker.postMessage('start');
+            } else {
+                backgroundTicker.postMessage('stop');
+                window.rAF_ID = requestAnimationFrame(gameLoop);
+            }
+        });
+
+        class NeuralNetwork {
+            constructor(ni, numHiddenLayers, neuronsPerLayer, no) {
+                this.ni = ni; 
+                this.nhLayers = numHiddenLayers; 
+                this.nhNeurons = neuronsPerLayer;
+                this.no = no; 
+                
+                const randW = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
+
+                this.weights = [];
+                this.biases = [];
+
+                let layerSizes = [ni];
+                for(let i=0; i<numHiddenLayers; i++) {
+                    layerSizes.push(neuronsPerLayer);
+                }
+                layerSizes.push(no);
+
+                for (let i = 0; i < layerSizes.length - 1; i++) {
+                    let rows = layerSizes[i + 1];
+                    let cols = layerSizes[i];
+                    this.weights.push(Array.from({length: rows}, () => Array.from({length: cols}, randW)));
+                    this.biases.push(Array.from({length: rows}, randW));
+                }
+            }
+
+            predict(inputs) {
+                let currentActivation = inputs;
+                
+                for (let i = 0; i < this.nhLayers; i++) {
+                    let nextActivation = [];
+                    for (let r = 0; r < this.weights[i].length; r++) {
+                        let sum = this.biases[i][r];
+                        for (let c = 0; c < this.weights[i][r].length; c++) {
+                            sum += this.weights[i][r][c] * currentActivation[c];
+                        }
+                        nextActivation.push(Math.max(0, sum)); 
+                    }
+                    currentActivation = nextActivation;
+                }
+                
+                let outputIdx = this.nhLayers;
+                let finalOutput = [];
+                for (let r = 0; r < this.weights[outputIdx].length; r++) {
+                    let sum = this.biases[outputIdx][r];
+                    for (let c = 0; c < this.weights[outputIdx][r].length; c++) {
+                        sum += this.weights[outputIdx][r][c] * currentActivation[c];
+                    }
+                    finalOutput.push(Math.tanh(sum));
+                }
+                
+                return finalOutput; 
+            }
+
+            clone() {
+                let clone = new NeuralNetwork(this.ni, this.nhLayers, this.nhNeurons, this.no);
+                clone.weights = this.weights.map(layer => layer.map(row => [...row]));
+                clone.biases = this.biases.map(layer => [...layer]);
+                return clone;
+            }
+
+            mutate(rate) {
+                const mutateVal = (val) => {
+                    if (Math.random() < rate) {
+                        return val + (Math.random() + Math.random() + Math.random() - 1.5) * 0.5;
+                    }
+                    return val;
+                };
+
+                this.weights = this.weights.map(layer => layer.map(row => row.map(mutateVal)));
+                this.biases = this.biases.map(layer => layer.map(mutateVal));
+            }
+
+            crossover(partner) {
+                let child = new NeuralNetwork(this.ni, this.nhLayers, this.nhNeurons, this.no);
+                const crossArray = (arr1, arr2) => arr1.map((v, i) => Math.random() > 0.5 ? v : arr2[i]);
+                const crossMatrix = (m1, m2) => m1.map((row, i) => crossArray(row, m2[i]));
+
+                child.weights = this.weights.map((layer, i) => crossMatrix(layer, partner.weights[i]));
+                child.biases = this.biases.map((layer, i) => crossArray(layer, partner.biases[i]));
+                return child;
+            }
+        }
+
+        function cyrb128(str) {
+            let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+            for (let i = 0, k; i < str.length; i++) {
+                k = str.charCodeAt(i);
+                h1 = h2 ^ Math.imul(h1 ^ k, 597399067); h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+                h3 = h4 ^ Math.imul(h3 ^ k, 951274213); h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+            }
+            h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067); h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+            h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213); h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+            return [(h1^h2^h3^h4)>>>0, (h2^h1)>>>0, (h3^h1)>>>0, (h4^h1)>>>0];
+        }
+
+        function mulberry32(a) {
+            return function() {
+              var t = a += 0x6D2B79F5;
+              t = Math.imul(t ^ t >>> 15, t | 1);
+              t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+              return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+
+        let random; 
+
+        function getCatmullRomPoint(t, p0, p1, p2, p3) {
+            const t2 = t * t; const t3 = t2 * t;
+            return {
+                x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+                y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+            };
+        }
+
+        class Track {
+            constructor(width, height, seedOrPoints) {
+                this.width = width;
+                this.height = height;
+                this.trackWidth = 120; 
+                this.points = []; 
+                this.startLine = { point: null, angle: 0, index: 0 };
+                this.totalLength = 0;
+                
+                if (!this.offscreenCanvas) {
+                    this.offscreenCanvas = document.createElement('canvas');
+                    this.offscreenCanvas.width = this.width;
+                    this.offscreenCanvas.height = this.height;
+                    this.offscreenCtx = this.offscreenCanvas.getContext('2d');
+                }
+                
+                if (Array.isArray(seedOrPoints)) {
+                    this.buildTrack(seedOrPoints);
+                } else {
+                    this.generateProcedural(seedOrPoints);
+                }
+            }
+
+            generateProcedural(seedString) {
+                const cx = this.width / 2; const cy = this.height / 2;
+                const seedArr = cyrb128(seedString);
+                random = mulberry32(seedArr[0]);
+                
+                let diffRatio = window.trackDifficulty / 100;
+                
+                const numControlPoints = Math.floor(random() * (10 * diffRatio)) + 15; 
+                const controlPoints = [];
+                
+                const maxRadiusX = (this.width / 2) - this.trackWidth - 150;
+                const maxRadiusY = (this.height / 2) - this.trackWidth - 150;
+
+                const harmonics = [];
+                const numHarmonics = diffRatio === 0 ? 1 : Math.floor(random() * (2 + 2*diffRatio)) + 2; 
+                
+                for (let i = 0; i < numHarmonics; i++) {
+                    harmonics.push({
+                        freq: Math.floor(random() * (1 + 6 * diffRatio)) + 1, 
+                        amp: diffRatio === 0 ? 0.05 : random() * (0.1 + 0.4 * diffRatio) + 0.05,        
+                        phase: random() * Math.PI * 2       
+                    });
+                }
+
+                let angleOffset = random() * Math.PI * 2;
+
+                for (let i = 0; i < numControlPoints; i++) {
+                    const angle = angleOffset + (i / numControlPoints) * Math.PI * 2;
+                    
+                    let radiusModifier = 1.0;
+                    for (let h of harmonics) {
+                        radiusModifier += Math.sin(angle * h.freq + h.phase) * h.amp;
+                    }
+                    
+                    radiusModifier = Math.max(0.4, Math.min(1.2, radiusModifier));
+                    radiusModifier /= 1.2; 
+
+                    const rx = maxRadiusX * radiusModifier;
+                    const ry = maxRadiusY * radiusModifier;
+                    
+                    const noiseX = (random() - 0.5) * (40 * diffRatio);
+                    const noiseY = (random() - 0.5) * (40 * diffRatio);
+
+                    controlPoints.push({
+                        x: cx + Math.cos(angle) * rx + noiseX,
+                        y: cy + Math.sin(angle) * ry + noiseY
+                    });
+                }
+                this.buildTrack(controlPoints);
+            }
+
+            buildTrack(controlPoints) {
+                this.points = [];
+                const pointsPerSegment = 20; 
+                const numControlPoints = controlPoints.length;
+
+                for (let i = 0; i < numControlPoints; i++) {
+                    const p0 = controlPoints[(i - 1 + numControlPoints) % numControlPoints];
+                    const p1 = controlPoints[i];
+                    const p2 = controlPoints[(i + 1) % numControlPoints];
+                    const p3 = controlPoints[(i + 2) % numControlPoints];
+
+                    for (let t = 0; t < 1; t += 1 / pointsPerSegment) {
+                        this.points.push(getCatmullRomPoint(t, p0, p1, p2, p3));
+                    }
+                }
+
+                this.findStartLine();
+                this.calculateTrackMetrics();
+                this.renderToOffscreen();
+                this.buildCollisionMap();
+            }
+
+            findStartLine() {
+                let maxStraightness = -1;
+                let bestIndex = 0;
+                const checkRange = 10; 
+
+                for (let i = 0; i < this.points.length; i++) {
+                    const pPrev = this.points[(i - checkRange + this.points.length) % this.points.length];
+                    const p = this.points[i];
+                    const pNext = this.points[(i + checkRange) % this.points.length];
+
+                    const v1 = { x: p.x - pPrev.x, y: p.y - pPrev.y };
+                    const v2 = { x: pNext.x - p.x, y: pNext.y - p.y };
+
+                    const len1 = Math.sqrt(v1.x*v1.x + v1.y*v1.y);
+                    const len2 = Math.sqrt(v2.x*v2.x + v2.y*v2.y);
+                    if(len1 === 0 || len2 === 0) continue;
+
+                    const dotProduct = ((v1.x/len1) * (v2.x/len2)) + ((v1.y/len1) * (v2.y/len2));
+                    
+                    if (dotProduct > maxStraightness) {
+                        maxStraightness = dotProduct;
+                        bestIndex = i;
+                    }
+                }
+
+                this.points = [...this.points.slice(bestIndex), ...this.points.slice(0, bestIndex)];
+                this.startLine.index = 0;
+                this.startLine.point = this.points[0];
+                
+                const pNext = this.points[Math.min(2, this.points.length-1)];
+                this.startLine.angle = Math.atan2(pNext.y - this.points[0].y, pNext.x - this.points[0].x);
+            }
+
+            calculateTrackMetrics() {
+                this.totalLength = 0;
+                this.points[0].cumDist = 0;
+                for (let i = 1; i < this.points.length; i++) {
+                    let d = Math.hypot(this.points[i].x - this.points[i-1].x, this.points[i].y - this.points[i-1].y);
+                    this.totalLength += d;
+                    this.points[i].cumDist = this.totalLength;
+                }
+                let finalDist = Math.hypot(this.points[0].x - this.points[this.points.length-1].x, this.points[0].y - this.points[this.points.length-1].y);
+                this.totalLength += finalDist;
+            }
+
+            buildCollisionMap() {
+                let collCanvas = document.createElement('canvas');
+                collCanvas.width = this.width;
+                collCanvas.height = this.height;
+                let cCtx = collCanvas.getContext('2d', { willReadFrequently: true });
+                
+                cCtx.fillStyle = '#000';
+                cCtx.fillRect(0, 0, this.width, this.height);
+
+                cCtx.beginPath();
+                cCtx.moveTo(this.points[0].x, this.points[0].y);
+                for (let i = 1; i < this.points.length; i++) cCtx.lineTo(this.points[i].x, this.points[i].y);
+                cCtx.closePath();
+
+                cCtx.lineWidth = this.trackWidth;
+                cCtx.strokeStyle = '#FFF';
+                cCtx.lineJoin = 'round';
+                cCtx.lineCap = 'round';
+                cCtx.stroke();
+
+                this.collisionData = cCtx.getImageData(0, 0, this.width, this.height).data;
+            }
+
+            isAsphalt(x, y) {
+                let ix = Math.floor(x);
+                let iy = Math.floor(y);
+                if(ix < 0 || ix >= this.width || iy < 0 || iy >= this.height) return false;
+                return this.collisionData[(iy * this.width + ix) * 4] > 128;
+            }
+
+            renderToOffscreen() {
+                const ctx = this.offscreenCtx;
+                ctx.clearRect(0, 0, this.width, this.height);
+
+                ctx.beginPath();
+                ctx.moveTo(this.points[0].x, this.points[0].y);
+                for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i].x, this.points[i].y);
+                ctx.closePath();
+                
+                const isCustom = Array.isArray(window.lastLoadedSeed);
+                const neonColor = isCustom ? '#d946ef' : '#38bdf8';
+
+                ctx.lineWidth = this.trackWidth + 10;
+                ctx.strokeStyle = neonColor; 
+                ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+                ctx.shadowColor = neonColor; ctx.shadowBlur = 20;
+                ctx.stroke();
+
+                ctx.shadowBlur = 0;
+                ctx.lineWidth = this.trackWidth;
+                ctx.strokeStyle = '#1e293b'; 
+                ctx.stroke();
+
+                const startX = this.startLine.point.x;
+                const startY = this.startLine.point.y;
+                ctx.save();
+                ctx.translate(startX, startY);
+                ctx.rotate(this.startLine.angle);
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillRect(-5, -this.trackWidth/2, 10, this.trackWidth);
+                ctx.restore();
+            }
+        }
+
+        class Sensor {
+            constructor() {
+                this.rayCount = 7; 
+                this.rayLength = 500; 
+                this.raySpread = Math.PI; 
+                this.readings = [];
+            }
+
+            update(car, track) {
+                this.readings = [];
+                for (let i = 0; i < this.rayCount; i++) {
+                    let rayAngle = car.angle - this.raySpread/2 + (this.raySpread / (this.rayCount-1)) * i;
+                    let rayDist = this.rayLength;
+
+                    for (let j = 0; j <= this.rayLength; j += 15) {
+                        let rx = car.x + Math.cos(rayAngle) * j;
+                        let ry = car.y + Math.sin(rayAngle) * j;
+                        
+                        if (!track.isAsphalt(rx, ry)) {
+                            rayDist = j; 
+                            break;
+                        }
+                    }
+                    
+                    let normalizedDist = 1 - (rayDist / this.rayLength);
+                    this.readings.push({ distance: rayDist, value: normalizedDist, angle: rayAngle });
+                }
+            }
+
+            draw(ctx, car) {
+                ctx.lineWidth = 1;
+                for (let i = 0; i < this.rayCount; i++) {
+                    let r = this.readings[i];
+                    let endX = car.x + Math.cos(r.angle) * r.distance;
+                    let endY = car.y + Math.sin(r.angle) * r.distance;
+                    
+                    ctx.strokeStyle = `rgba(${255 * r.value}, ${255 * (1-r.value)}, 0, 0.8)`;
+                    ctx.beginPath();
+                    ctx.moveTo(car.x, car.y);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.beginPath();
+                    ctx.arc(endX, endY, 4, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        class Car {
+            constructor(startX, startY, startAngle, brain, isPlayer = false) {
+                this.x = startX; this.y = startY; this.angle = startAngle;
+                this.vx = 0; this.vy = 0; this.speed = 0; 
+                
+                this.baseMaxSpeed = 16;
+                this.baseAccel = 0.5;
+                this.friction = 0.94;
+                this.turnSpeed = 0.08;
+
+                this.isPlayer = isPlayer;
+
+                if(brain) {
+                    this.brain = brain.clone();
+                } else if (!this.isPlayer) {
+                    this.brain = new NeuralNetwork(9, window.nnHiddenLayers, window.nnNeuronsPerLayer, 2);
+                }
+                
+                this.sensor = new Sensor();
+                this.isDead = false;
+                
+                this.fitness = 0;
+                this.maxFitnessAchieved = 0;
+                this.lastMilestone = 0; 
+                
+                this.ticksAlive = 0;
+                this.lapTicks = 0;
+                this.finishedLap = false; 
+                
+                this.currentTrackIndex = 0;
+                this.laps = 0;
+                this.timeToLive = 200; 
+                
+                this.color = `hsl(${Math.random() * 360}, 80%, 60%)`;
+            }
+
+            resetToStart(track) {
+                this.x = track.startLine.point.x;
+                this.y = track.startLine.point.y;
+                this.angle = track.startLine.angle;
+                this.vx = 0;
+                this.vy = 0;
+                this.speed = 0;
+                this.currentTrackIndex = 0;
+                this.laps = 0;
+                this.ticksAlive = 0;
+                this.lastMilestone = 0;
+                this.isDead = false;
+                this.finishedLap = false;
+                this.fitness = 0;
+                this.maxFitnessAchieved = 0;
+            }
+
+            update(track) {
+                if (this.isDead) return;
+                
+                this.ticksAlive++;
+
+                this.sensor.update(this, track);
+
+                let throttle = 0; 
+                let steering = 0; 
+
+                if (this.isPlayer) {
+                    if (window.keys['ArrowUp']) throttle = 1;
+                    if (window.keys['ArrowDown']) throttle = -1;
+                    if (window.keys['ArrowLeft']) steering = -1;
+                    if (window.keys['ArrowRight']) steering = 1;
+                } else {
+                    let nextIdx = (this.currentTrackIndex + 2) % track.points.length;
+                    let trackTangent = Math.atan2(
+                        track.points[nextIdx].y - track.points[this.currentTrackIndex].y, 
+                        track.points[nextIdx].x - track.points[this.currentTrackIndex].x
+                    );
+                    let alignement = Math.atan2(Math.sin(this.angle - trackTangent), Math.cos(this.angle - trackTangent));
+
+                    let inputs = this.sensor.readings.map(r => r.value);
+                    inputs.push(this.speed / this.baseMaxSpeed); 
+                    inputs.push(alignement / Math.PI);
+
+                    let outputs = this.brain.predict(inputs);
+                    throttle = outputs[0]; 
+                    steering = outputs[1]; 
+                }
+
+                let engineForce = throttle > 0 ? throttle * this.baseAccel : throttle * this.baseAccel * 1.5;
+
+                this.vx += Math.cos(this.angle) * engineForce;
+                this.vy += Math.sin(this.angle) * engineForce;
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+                
+                let dot = (this.vx * Math.cos(this.angle) + this.vy * Math.sin(this.angle));
+                let isReversing = dot < -0.1;
+                let currentMaxSpeed = isReversing ? this.baseMaxSpeed * 0.35 : this.baseMaxSpeed;
+
+                this.speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+
+                if (this.speed > currentMaxSpeed) {
+                    const ratio = currentMaxSpeed / this.speed;
+                    this.vx *= ratio; 
+                    this.vy *= ratio;
+                    this.speed = currentMaxSpeed;
+                }
+
+                let dir = 1;
+                if (this.speed > 0.1) {
+                    dir = dot >= 0 ? 1 : -1;
+                }
+                this.angle += steering * this.turnSpeed * dir;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (!track.isAsphalt(this.x, this.y)) {
+                    this.isDead = true;
+                    if (!this.isPlayer && (window.gameMode === 'evolution' || window.gameMode === 'random_evo')) {
+                        this.fitness = this.maxFitnessAchieved * 0.85; 
+                    }
+                    return; 
+                }
+
+                let searchRangeBackward = 10; 
+                let searchRangeForward = 25; 
+                let minDist = Infinity;
+                let bestIdx = this.currentTrackIndex;
+                
+                for(let i = -searchRangeBackward; i <= searchRangeForward; i++) {
+                    let idx = (this.currentTrackIndex + i + track.points.length) % track.points.length;
+                    let p = track.points[idx];
+                    let dSq = (p.x - this.x)**2 + (p.y - this.y)**2;
+                    if(dSq < minDist) {
+                        minDist = dSq;
+                        bestIdx = idx;
+                    }
+                }
+
+                let diff = bestIdx - this.currentTrackIndex;
+                let halfTrack = track.points.length / 2;
+                
+                if (diff > halfTrack) {
+                    this.laps--; 
+                } else if (diff < -halfTrack) {
+                    this.laps++; 
+                    
+                    if (this.laps > 0 && !this.finishedLap) {
+                        this.finishedLap = true;
+                        this.lapTicks = this.ticksAlive;
+                    }
+                }
+                
+                this.currentTrackIndex = bestIdx;
+                let currentProgress = (this.laps * track.totalLength) + track.points[bestIdx].cumDist;
+                
+                if (currentProgress > this.maxFitnessAchieved) {
+                    this.maxFitnessAchieved = currentProgress;
+                }
+
+                if (this.finishedLap) {
+                    this.fitness = 1000000 + (100000 - this.lapTicks);
+                } else {
+                    this.fitness = this.maxFitnessAchieved;
+                }
+
+                if (currentProgress > this.lastMilestone + 150) {
+                    this.lastMilestone = currentProgress;
+                    if (!this.isPlayer) this.timeToLive = 200; 
+                }
+
+                if (!this.isPlayer && (window.gameMode === 'evolution' || window.gameMode === 'random_evo')) {
+                    this.timeToLive--;
+                    if (this.timeToLive <= 0 || currentProgress < -300) {
+                        this.isDead = true; 
+                    }
+                } else if (window.gameMode === 'race') {
+                    if (currentProgress < -300) this.isDead = true;
+                }
+            }
+
+            draw(ctx, isBest, isGhost = false) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+
+                if (isGhost) {
+                    ctx.globalAlpha = this.isDead ? 0.05 : 0.15;
+                } else {
+                    ctx.globalAlpha = this.isDead ? 0.2 : (isBest ? 1.0 : 0.5);
+                }
+
+                const carL = 24; const carW = 12;
+
+                if (isBest && !this.isDead && !isGhost) {
+                    ctx.shadowColor = this.color;
+                    ctx.shadowBlur = 15;
+                }
+
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(-carL/2, -carW/2, carL, carW);
+                
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = this.color;
+                ctx.strokeRect(-carL/2, -carW/2, carL, carW);
+
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillRect(2, -carW/2 + 2, 6, carW - 4);
+
+                ctx.restore();
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Population {
+            constructor(size, track, seedBrain = null) {
+                this.size = size;
+                this.cars = [];
+                this.track = track;
+                this.generation = 1;
+                this.bestFitnessGlobal = 0;
+                this.stagnationCounter = 0;
+                this.bestCar = null;
+                this.aliveCount = size;
+
+                for (let i = 0; i < this.size; i++) {
+                    let brain = null;
+                    if (seedBrain) {
+                        brain = seedBrain.clone();
+                        if (i > 0) brain.mutate(0.05 + (i/this.size) * 0.2); 
+                    }
+                    this.cars.push(new Car(track.startLine.point.x, track.startLine.point.y, track.startLine.angle, brain));
+                }
+            }
+
+            update() {
+                let allDead = true;
+                let currentBest = null;
+                let maxFit = -Infinity;
+                this.aliveCount = 0;
+                let roundWinner = null;
+
+                for (let car of this.cars) {
+                    if (!car.isDead) {
+                        car.update(this.track);
+                        
+                        if (car.finishedLap && !roundWinner) {
+                            roundWinner = car;
+                        }
+                    }
+
+                    if (!car.isDead) {
+                        allDead = false;
+                        this.aliveCount++;
+                    }
+                    if (car.fitness > maxFit) {
+                        maxFit = car.fitness;
+                        currentBest = car;
+                    }
+                }
+
+                if (roundWinner) {
+                    window.currentStageWon = true; 
+                    window.globalBestBrain = roundWinner.brain.clone(); 
+                    
+                    if (roundWinner.lapTicks < window.globalBestLapTicks) {
+                        window.globalBestLapTicks = roundWinner.lapTicks;
+                        this.stagnationCounter = -1; 
+                        let seconds = (roundWinner.lapTicks / 60).toFixed(2);
+                        let uiEl = document.getElementById('bestLapDisplay');
+                        uiEl.textContent = seconds + "s";
+                        uiEl.classList.add('text-fuchsia-400');
+                        setTimeout(() => uiEl.classList.remove('text-fuchsia-400'), 500);
+                    }
+                    
+                    for (let car of this.cars) {
+                        car.isDead = true;
+                    }
+                    allDead = true;
+                }
+
+                this.bestCar = currentBest;
+                
+                if (!roundWinner && maxFit > this.bestFitnessGlobal + 10) {
+                    this.bestFitnessGlobal = maxFit;
+                    this.stagnationCounter = 0;
+                }
+
+                if (allDead) {
+                    this.nextGeneration();
+                }
+            }
+
+            nextGeneration() {
+                this.stagnationCounter++; 
+                
+                this.cars.sort((a, b) => b.fitness - a.fitness);
+                window.globalBestBrain = this.cars[0].brain.clone(); 
+                
+                let nextGen = [];
+                let hasWinner = this.cars[0].finishedLap;
+                if (hasWinner) window.currentStageWon = true;
+                
+                let trackSwitched = false;
+                if (window.gameMode === 'random_evo') {
+                    window.gensOnCurrentTrack++;
+                    if (window.gensOnCurrentTrack >= window.maxGensPerTrack) {
+                        
+                        window.stageResults.push(window.currentStageWon ? 1 : 0);
+                        window.currentStageWon = false; 
+
+                        window.randomStage++;
+                        window.gensOnCurrentTrack = 0;
+                        this.stagnationCounter = 0; 
+                        hasWinner = false; 
+                        trackSwitched = true;
+
+                        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                        let newSeed = '';
+                        for (let i = 0; i < 6; i++) {
+                            newSeed += chars.charAt(Math.floor(Math.random() * chars.length));
+                        }
+                        
+                        document.getElementById('seedInput').value = newSeed;
+                        
+                        track = new Track(canvas.width, canvas.height, newSeed);
+                        this.track = track;
+                        
+                        window.globalBestLapTicks = Infinity;
+                        document.getElementById('bestLapDisplay').textContent = "--:--";
+                    }
+                }
+
+                let recentStages = window.stageResults.slice(-100);
+                let winRate = recentStages.length > 0 ? (recentStages.reduce((a,b)=>a+b,0) / recentStages.length) * 100 : 0;
+
+                window.populationHistory.push({
+                    gen: this.generation,
+                    fitness: this.bestFitnessGlobal,
+                    lap: window.globalBestLapTicks,
+                    winRate: winRate
+                });
+                if (window.statsMenuShown) drawStatsGraph();
+
+                let currentMutationRate = 0.05;
+                let statusText = "NORMAL";
+                let statusColor = "text-slate-400";
+
+                if (window.gameMode === 'random_evo') {
+                    if (hasWinner && !trackSwitched) {
+                        currentMutationRate = 0.02; 
+                        statusText = "OPTIMISATION";
+                        statusColor = "text-fuchsia-400";
+                    } else {
+                        currentMutationRate = 0.05;
+                        statusText = "NORMAL";
+                        statusColor = "text-slate-400";
+                    }
+                } else {
+                    if (hasWinner && !trackSwitched) {
+                        if (this.stagnationCounter < 10) {
+                            currentMutationRate = 0.02; 
+                            statusText = "OPTIMISATION";
+                            statusColor = "text-fuchsia-400";
+                        } else {
+                            currentMutationRate = 0.2; 
+                            statusText = "MUTATION x4";
+                            statusColor = "text-yellow-400";
+                        }
+                    } else {
+                        if (this.stagnationCounter < 10) {
+                            currentMutationRate = 0.05;
+                            statusText = "NORMAL";
+                            statusColor = "text-slate-400";
+                        } else if (this.stagnationCounter < 25) {
+                            currentMutationRate = 0.2; 
+                            statusText = "MUTATION x4";
+                            statusColor = "text-yellow-400";
+                        } else {
+                            currentMutationRate = 0.6; 
+                            statusText = "MUTATION x12";
+                            statusColor = "text-red-500";
+                        }
+                    }
+                }
+
+                const indicator = document.getElementById('statusIndicator');
+                
+                if (window.gameMode === 'random_evo') {
+                    indicator.textContent = `STAGE ${window.randomStage} (${window.gensOnCurrentTrack}/${window.maxGensPerTrack}) : ${statusText}`;
+                } else {
+                    indicator.textContent = statusText;
+                }
+                
+                indicator.className = `text-xs font-bold mt-2 uppercase tracking-widest ${statusColor} ${this.stagnationCounter > 25 ? 'animate-pulse' : ''}`;
+
+                nextGen.push(new Car(this.track.startLine.point.x, this.track.startLine.point.y, this.track.startLine.angle, this.cars[0].brain));
+                nextGen.push(new Car(this.track.startLine.point.x, this.track.startLine.point.y, this.track.startLine.angle, this.cars[1].brain));
+
+                let breedCount = Math.floor(this.size * 0.85);
+                for (let i = 2; i < breedCount; i++) {
+                    let childBrain;
+                    if (hasWinner && !trackSwitched) {
+                        childBrain = this.cars[0].brain.clone();
+                    } else {
+                        let parentA = this.tournamentSelection();
+                        let parentB = this.tournamentSelection();
+                        childBrain = parentA.brain.crossover(parentB.brain);
+                    }
+                    
+                    childBrain.mutate(currentMutationRate); 
+                    nextGen.push(new Car(this.track.startLine.point.x, this.track.startLine.point.y, this.track.startLine.angle, childBrain));
+                }
+
+                for (let i = breedCount; i < this.size; i++) {
+                     nextGen.push(new Car(this.track.startLine.point.x, this.track.startLine.point.y, this.track.startLine.angle));
+                }
+
+                this.cars = nextGen;
+                this.generation++;
+            }
+
+            tournamentSelection() {
+                let best = null;
+                for(let i=0; i<4; i++) {
+                    let randIndex = Math.floor(Math.random() * this.size);
+                    let contestant = this.cars[randIndex];
+                    if(best === null || contestant.fitness > best.fitness) {
+                        best = contestant;
+                    }
+                }
+                return best;
+            }
+
+            draw(ctx) {
+                for (let car of this.cars) {
+                    if (car.isDead) car.draw(ctx, false);
+                }
+                for (let car of this.cars) {
+                    if (!car.isDead && car !== this.bestCar) car.draw(ctx, false);
+                }
+                if (this.bestCar && !this.bestCar.isDead) {
+                    this.bestCar.sensor.draw(ctx, this.bestCar);
+                    this.bestCar.draw(ctx, true);
+                }
+            }
+        }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const CANVAS_WIDTH = 1920;
+        const CANVAS_HEIGHT = 1080;
+
+        let track, population;
+        let simulationSpeed = 1;
+        window.lastLoadedSeed = null;
+
+        const uiGen = document.getElementById('genDisplay');
+        const uiAlive = document.getElementById('aliveDisplay');
+        const uiFitness = document.getElementById('bestFitnessDisplay');
+        const uiSpeed = document.getElementById('speedDisplay');
+        const uiRpm = document.getElementById('rpmBar');
+        const uiBestLap = document.getElementById('bestLapDisplay');
+
+        function initSimulation(seedOrPoints, preserveBrain = false) {
+            window.lastLoadedSeed = seedOrPoints;
+            let brainToKeep = preserveBrain ? (window.globalBestBrain || (population ? population.bestCar.brain : null)) : null;
+
+            track = new Track(CANVAS_WIDTH, CANVAS_HEIGHT, seedOrPoints);
+            population = new Population(window.populationSize, track, brainToKeep); 
+            
+            window.globalBestLapTicks = Infinity;
+            if(!preserveBrain) window.globalBestBrain = null;
+            
+            if (!preserveBrain) {
+                window.populationHistory = []; 
+                window.stageResults = [];
+                window.currentStageWon = false;
+            }
+            
+            uiBestLap.textContent = "--:--";
+            
+            if (window.gameMode !== 'evolution' && window.gameMode !== 'random_evo' && window.gameMode !== 'race' && window.gameMode !== 'draw') {
+                window.gameMode = window.previousEvoMode || 'evolution';
+                
+                if (window.gameMode === 'random_evo') {
+                    setupRandomEvoUI();
+                } else {
+                    setupEvoUI();
+                }
+
+                const ind = document.getElementById('statusIndicator');
+                if (window.gameMode === 'random_evo') {
+                    ind.textContent = `STAGE ${window.randomStage} (GEN 0/${window.maxGensPerTrack}) : NORMAL`;
+                } else {
+                    ind.textContent = "NORMAL";
+                }
+                ind.className = "text-xs font-bold mt-2 uppercase tracking-widest text-slate-400";
+
+                document.getElementById('panel-telemetry').classList.remove('hide-ui');
+                document.getElementById('panel-ai').classList.remove('hide-ui');
+                document.getElementById('panel-time').classList.remove('hide-ui');
+            }
+        }
+
+        function startDrawing(e) {
+            if (window.gameMode !== 'draw') return;
+            window.isDrawing = true;
+            window.drawnPoints = [];
+            window.drawnPoints.push(getCanvasPos(e));
+        }
+
+        function drawMove(e) {
+            if (!window.isDrawing || window.gameMode !== 'draw') return;
+            let pos = getCanvasPos(e);
+            let lastP = window.drawnPoints[window.drawnPoints.length - 1];
+            
+            if (Math.hypot(pos.x - lastP.x, pos.y - lastP.y) > 40) {
+                window.drawnPoints.push(pos);
+            }
+        }
+
+        function stopDrawing() {
+            if (window.gameMode !== 'draw' || !window.isDrawing) return;
+            window.isDrawing = false;
+            
+            if (window.drawnPoints.length > 6) {
+                let preserve = (window.drawIntent === 'race');
+                initSimulation(window.drawnPoints, preserve);
+                savedTrainingState = null;
+                if (window.drawIntent === 'race') {
+                    startRaceMode();
+                } else {
+                    setupEvoUI();
+                    window.gameMode = 'evolution';
+                }
+            } else {
+                window.drawnPoints = []; 
+            }
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', drawMove);
+        window.addEventListener('mouseup', stopDrawing);
+
+        canvas.addEventListener('touchstart', startDrawing);
+        canvas.addEventListener('touchmove', drawMove);
+        window.addEventListener('touchend', stopDrawing);
+
+        function showRaceEndMenu(winner) {
+            window.raceEndMenuShown = true;
+            const endMenu = document.getElementById('race-end-menu');
+            const title = document.getElementById('race-end-title');
+            const subtitle = document.getElementById('race-end-subtitle');
+
+            if (winner === 'Joueur') {
+                title.textContent = 'VICTOIRE';
+                title.className = 'text-6xl font-black mb-4 tracking-widest text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.8)]';
+                subtitle.textContent = 'L\'HUMANITÉ TRIOMPHE';
+            } else {
+                title.textContent = 'DÉFAITE';
+                title.className = 'text-6xl font-black mb-4 tracking-widest text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]';
+                subtitle.textContent = 'L\'IA EST DÉSORMAIS SUPÉRIEURE';
+            }
+            
+            endMenu.classList.remove('hidden');
+            setTimeout(() => endMenu.classList.remove('opacity-0'), 50);
+        }
+
+        function gameLoop() {
+            if (document.hidden) return; 
+
+            if (window.gameMode === 'menu') {
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                window.rAF_ID = requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            if (window.gameMode === 'evolution' || window.gameMode === 'random_evo') {
+                for (let s = 0; s < simulationSpeed; s++) {
+                    population.update();
+                }
+
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                track.offscreenCtx && ctx.drawImage(track.offscreenCanvas, 0, 0);
+                population.draw(ctx);
+
+                uiGen.textContent = population.generation;
+                uiAlive.textContent = `${population.aliveCount} / ${population.size}`;
+                uiFitness.textContent = `${Math.max(0, Math.floor(population.bestFitnessGlobal))} m`;
+                
+                if (population.bestCar && !population.bestCar.isDead) {
+                    uiSpeed.textContent = Math.floor(Math.abs(population.bestCar.speed * 10));
+                    let speedRatio = population.bestCar.speed / 7.83; 
+                    uiRpm.style.width = `${Math.min(100, speedRatio * 100)}%`;
+                }
+
+            } else if (window.gameMode === 'race') {
+                for (let s = 0; s < simulationSpeed; s++) {
+                    if (!window.raceWinner) {
+                        if (!window.raceStarted) {
+                            if (window.keys['ArrowUp'] || window.keys['ArrowDown'] || window.keys['ArrowLeft'] || window.keys['ArrowRight']) {
+                                window.raceStarted = true;
+                                const ind = document.getElementById('statusIndicator');
+                                ind.textContent = "COURSE EN COURS";
+                                ind.className = "text-xs font-bold mt-2 uppercase tracking-widest text-emerald-400 animate-pulse";
+                            }
+                        }
+
+                        if (window.raceStarted) {
+                            window.racePlayerCar.update(track);
+                            if (window.racePlayerCar.isDead) window.racePlayerCar.resetToStart(track);
+                            if (window.racePlayerCar.finishedLap) window.raceWinner = 'Joueur';
+
+                            let aiFinishedLap = false;
+                            for (let aiCar of window.raceAiCars) {
+                                aiCar.update(track);
+                                if (aiCar.isDead) aiCar.resetToStart(track);
+                                if (aiCar.finishedLap) aiFinishedLap = true;
+                            }
+                            if (aiFinishedLap && !window.raceWinner) window.raceWinner = 'IA';
+                        }
+                    }
+                }
+
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                track.offscreenCtx && ctx.drawImage(track.offscreenCanvas, 0, 0);
+
+                let bestAiIdx = 0;
+                let bestAiFit = -Infinity;
+                for (let i = 0; i < window.raceAiCars.length; i++) {
+                    if (window.raceAiCars[i].fitness > bestAiFit) {
+                        bestAiFit = window.raceAiCars[i].fitness;
+                        bestAiIdx = i;
+                    }
+                }
+
+                for (let i = window.raceAiCars.length - 1; i >= 0; i--) {
+                    let aiCar = window.raceAiCars[i];
+                    let isBestAi = (i === bestAiIdx);
+                    
+                    aiCar.color = isBestAi ? '#f43f5e' : '#fb7185';
+                    aiCar.draw(ctx, isBestAi, !isBestAi);
+                }
+                
+                window.racePlayerCar.draw(ctx, true);
+
+                uiSpeed.textContent = Math.floor(Math.abs(window.racePlayerCar.speed * 10));
+                let speedRatio = window.racePlayerCar.speed / 7.83;
+                uiRpm.style.width = `${Math.min(100, speedRatio * 100)}%`;
+
+                if (window.raceWinner) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+                    if (!window.raceEndMenuShown) {
+                        showRaceEndMenu(window.raceWinner);
+                    }
+                }
+            } else if (window.gameMode === 'draw') {
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                
+                if (window.drawnPoints && window.drawnPoints.length > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(window.drawnPoints[0].x, window.drawnPoints[0].y);
+                    for(let i=1; i<window.drawnPoints.length; i++) {
+                        ctx.lineTo(window.drawnPoints[i].x, window.drawnPoints[i].y);
+                    }
+                    
+                    ctx.lineWidth = 120; 
+                    ctx.strokeStyle = 'rgba(217, 70, 239, 0.15)'; 
+                    ctx.lineJoin = 'round';
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+
+                    ctx.lineWidth = 10;
+                    ctx.strokeStyle = '#d946ef';
+                    ctx.shadowColor = '#d946ef';
+                    ctx.shadowBlur = 20;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+                ctx.fillRect(0, 0, CANVAS_WIDTH, 180);
+                
+                ctx.fillStyle = '#d946ef';
+                ctx.font = 'bold 45px Orbitron';
+                ctx.textAlign = 'center';
+                ctx.fillText("DESSINEZ VOTRE CIRCUIT", CANVAS_WIDTH/2, 80);
+                ctx.font = '22px Orbitron';
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillText("Maintenez le clic pour tracer une boucle. Relâchez pour lancer.", CANVAS_WIDTH/2, 130);
+            }
+
+            window.rAF_ID = requestAnimationFrame(gameLoop);
+        }
+
+        document.getElementById('homeBtn').addEventListener('click', () => {
+            window.gameMode = 'menu';
+            document.getElementById('ui-layer').style.display = 'none';
+            
+            window.raceWinner = null;
+            window.raceStarted = false;
+            window.raceEndMenuShown = false;
+            
+            document.getElementById('race-end-menu').classList.add('hidden', 'opacity-0');
+            document.getElementById('stats-menu').classList.add('hidden', 'opacity-0');
+            document.getElementById('settings-menu').classList.add('hidden', 'opacity-0');
+
+            const mainMenu = document.getElementById('main-menu');
+            mainMenu.classList.remove('hidden');
+            setTimeout(() => mainMenu.classList.remove('opacity-0'), 50);
+
+            if (window.isDrawing) {
+                window.isDrawing = false;
+                window.drawnPoints = [];
+            }
+        });
+
+        document.getElementById('menu-settings-btn').addEventListener('click', () => {
+            const menu = document.getElementById('settings-menu');
+            menu.classList.remove('hidden');
+            setTimeout(() => menu.classList.remove('opacity-0'), 50);
+        });
+
+        document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+            const menu = document.getElementById('settings-menu');
+            menu.classList.add('opacity-0');
+            setTimeout(() => menu.classList.add('hidden'), 300);
+        });
+
+        document.getElementById('difficultyInput').addEventListener('input', (e) => {
+            window.trackDifficulty = parseInt(e.target.value);
+            document.getElementById('diffValDisplay').textContent = window.trackDifficulty + "%";
+        });
+
+        document.getElementById('populationInput').addEventListener('input', (e) => {
+            window.populationSize = parseInt(e.target.value);
+            document.getElementById('popValDisplay').textContent = window.populationSize;
+        });
+
+        document.getElementById('hiddenLayersInput').addEventListener('input', (e) => {
+            window.nnHiddenLayers = parseInt(e.target.value);
+            document.getElementById('hiddenLayersDisplay').textContent = window.nnHiddenLayers;
+        });
+
+        document.getElementById('neuronsInput').addEventListener('input', (e) => {
+            window.nnNeuronsPerLayer = parseInt(e.target.value);
+            document.getElementById('neuronsDisplay').textContent = window.nnNeuronsPerLayer;
+        });
+
+        document.getElementById('statsBtn').addEventListener('click', () => {
+            const statsMenu = document.getElementById('stats-menu');
+            statsMenu.classList.remove('hidden');
+            setTimeout(() => statsMenu.classList.remove('opacity-0'), 50);
+            window.statsMenuShown = true;
+            drawStatsGraph();
+        });
+
+        document.getElementById('closeStatsBtn').addEventListener('click', () => {
+            const statsMenu = document.getElementById('stats-menu');
+            statsMenu.classList.add('opacity-0');
+            setTimeout(() => statsMenu.classList.add('hidden'), 500);
+            window.statsMenuShown = false;
+        });
+        
+        document.getElementById('menu-evo-btn').addEventListener('click', () => {
+            document.getElementById('main-menu').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('main-menu').classList.add('hidden'), 500);
+            document.getElementById('ui-layer').style.display = 'flex';
+            window.gameMode = 'evolution';
+            setupEvoUI();
+            
+            const seed = (document.getElementById('seedInput').value || "LOLO").toUpperCase();
+            document.getElementById('seedInput').value = seed;
+            initSimulation(seed, false);
+        });
+
+        document.getElementById('menu-random-btn').addEventListener('click', () => {
+            document.getElementById('main-menu').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('main-menu').classList.add('hidden'), 500);
+            document.getElementById('ui-layer').style.display = 'flex';
+            
+            window.gameMode = 'random_evo';
+            window.randomStage = 1;
+            window.gensOnCurrentTrack = 0;
+            
+            let val = parseInt(document.getElementById('gensPerTrackInput').value);
+            if (isNaN(val) || val < 1) val = 1;
+            window.maxGensPerTrack = val;
+            
+            setupRandomEvoUI();
+            
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let newSeed = '';
+            for (let i = 0; i < 6; i++) {
+                newSeed += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            
+            document.getElementById('seedInput').value = newSeed;
+            initSimulation(newSeed, false);
+        });
+
+        document.getElementById('menu-draw-btn').addEventListener('click', () => {
+            document.getElementById('main-menu').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('main-menu').classList.add('hidden'), 500);
+            document.getElementById('ui-layer').style.display = 'flex';
+            
+            setupEvoUI(); 
+            document.getElementById('drawModeBtn').click(); 
+        });
+
+        document.getElementById('generateBtn').addEventListener('click', () => {
+            if (window.previousEvoMode === 'random_evo') {
+                saveTrainingState();
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                let newSeed = '';
+                for (let i = 0; i < 6; i++) {
+                    newSeed += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                document.getElementById('seedInput').value = newSeed;
+                initSimulation(newSeed, true); 
+                startRaceMode();
+            } else {
+                window.gameMode = 'evolution';
+                setupEvoUI();
+                
+                const seed = (document.getElementById('seedInput').value || "LOLO").toUpperCase();
+                document.getElementById('seedInput').value = seed;
+                initSimulation(seed, false);
+            }
+        });
+
+        document.getElementById('drawModeBtn').addEventListener('click', () => {
+            const btn = document.getElementById('drawModeBtn');
+            
+            if (window.gameMode !== 'draw') {
+                saveTrainingState();
+                window.drawIntent = (window.previousEvoMode === 'random_evo') ? 'race' : 'train';
+                window.gameMode = 'draw';
+                btn.textContent = "Annuler";
+                btn.className = "border border-rose-500 text-rose-400 hover:bg-rose-500/20 font-bold px-4 h-full uppercase tracking-wider text-xs shadow-[0_0_10px_rgba(244,63,94,0.5)] whitespace-nowrap transition-colors";
+                
+                document.getElementById('panel-telemetry').classList.add('hide-ui');
+                document.getElementById('panel-ai').classList.add('hide-ui');
+                document.getElementById('panel-time').classList.add('hide-ui');
+                document.getElementById('playBtn').classList.add('hidden'); 
+                
+                window.drawnPoints = [];
+                window.isDrawing = false;
+            } else {
+                window.drawnPoints = []; 
+                restoreTrainingState();
+                if (window.previousEvoMode === 'random_evo') {
+                    setupRandomEvoUI();
+                    window.gameMode = 'random_evo';
+                } else {
+                    setupEvoUI();
+                    window.gameMode = 'evolution';
+                }
+            }
+        });
+
+        document.getElementById('playBtn').addEventListener('click', () => {
+            if (window.gameMode === 'evolution' || window.gameMode === 'random_evo') {
+                if (window.gameMode === 'random_evo') {
+                    saveTrainingState();
+                    const customSeed = (document.getElementById('seedInput').value || "LOLO").toUpperCase();
+                    document.getElementById('seedInput').value = customSeed;
+                    initSimulation(customSeed, true);
+                }
+                startRaceMode();
+            } else if (window.gameMode === 'race') {
+                returnToTraining();
+            }
+        });
+
+        document.getElementById('btn-replay').addEventListener('click', () => {
+            const endMenu = document.getElementById('race-end-menu');
+            endMenu.classList.add('opacity-0');
+            setTimeout(() => endMenu.classList.add('hidden'), 500);
+
+            window.racePlayerCar.resetToStart(track);
+            for (let aiCar of window.raceAiCars) {
+                aiCar.resetToStart(track);
+            }
+            window.raceWinner = null;
+            window.raceStarted = false;
+            window.raceEndMenuShown = false;
+
+            const ind = document.getElementById('statusIndicator');
+            ind.textContent = "PRÊT. APPUYEZ SUR UNE TOUCHE...";
+            ind.className = "text-xs font-bold mt-2 uppercase tracking-widest text-yellow-400 animate-pulse";
+        });
+
+        document.getElementById('btn-return-evo').addEventListener('click', returnToTraining);
+
+        document.querySelectorAll('.speed-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.speed-btn').forEach(b => {
+                    b.classList.remove('border-sky-400', 'text-sky-400', 'bg-sky-500/30', 'border-red-400', 'text-red-400', 'bg-red-500/30', 'border-yellow-500', 'text-yellow-400', 'bg-yellow-500/30');
+                    b.classList.add('border-slate-600', 'text-slate-400', 'hover:bg-slate-700/50');
+                });
+                
+                e.target.classList.remove('border-slate-600', 'text-slate-400', 'hover:bg-slate-700/50');
+                const speed = parseInt(e.target.getAttribute('data-speed'));
+                if (speed === 50) {
+                    e.target.classList.add('border-red-400', 'text-red-400', 'bg-red-500/30');
+                } else if (speed === 0) {
+                    e.target.classList.add('border-yellow-500', 'text-yellow-400', 'bg-yellow-500/30');
+                } else {
+                    e.target.classList.add('border-sky-400', 'text-sky-400', 'bg-sky-500/30');
+                }
+                
+                simulationSpeed = speed;
+            });
+        });
+
+        const initialSeed = (document.getElementById('seedInput').value || "LOLO").toUpperCase();
+        document.getElementById('seedInput').value = initialSeed;
+        initSimulation(initialSeed);
+        window.rAF_ID = requestAnimationFrame(gameLoop);
+
+    </script>
+</body>
+</html>
